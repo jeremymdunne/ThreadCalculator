@@ -1,3 +1,11 @@
+"""
+materialdatReader.py
+Reads and parses the .materialdat file extension
+Author: Jeremy Dunne
+Date: September, 2021
+"""
+
+# imports
 import os
 import csv
 

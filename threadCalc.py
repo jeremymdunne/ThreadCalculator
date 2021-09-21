@@ -1,22 +1,51 @@
-"""
-threadCalc.py
+from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtWidgets import (
+QApplication, QMainWindow, QWidget, QComboBox, QVBoxLayout, QHBoxLayout,
+QGridLayout, QLabel, QTabWidget)
 
-Calculator to simplify calculations involving threads (internal & external)
-Author: Jeremy Dunne
-Date: 9/2021
+from ThreadCalculator import *
+from threaddatReader import *
+from materialdatReader import *
+from UI.BoltShearTensileAnalysisWidget import *
 
 
-"""
 
-import csv
-import os
+class ThreadCalcUI(QMainWindow):
+    def __init__(self, thread_data, material_data):
+        super().__init__()
+
+        self.setWindowTitle("Thread Calc V0.1")
+        self.setFixedSize(800,600)
+
+        # main widget
+
+        tab_widget = QTabWidget()
+        self.BoltShearTensileAnalysis = BoltShearTensileAnalysisWidget(thread_data, material_data)
+        tab_widget.addTab(self.BoltShearTensileAnalysis, "Bolt Shear and Tensile Analysis")
+
+        self.setCentralWidget(tab_widget)
+
+
+
+
 
 def main():
-    print("threadCalc V0.1")
-    thread_data = getThreadData()
-    return
+    # read in the threads
+    threadFiles = getThreadDataFiles()
+    materialFiles = getMaterialdatFiles()
+    materials = []
+    for m in materialFiles:
+        materials += readMaterialdat(m)
+    threads = []
+    for f in threadFiles:
+        threads.append(readThreaddat(f))
+    print(threads)
+    app = QApplication([])
 
+    window = ThreadCalcUI(threads, materials)
+    window.show()
 
+    app.exec_()
 
 
 if __name__ == '__main__':

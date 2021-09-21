@@ -1,4 +1,11 @@
-# reads a threaddat file and returns the data in a dict
+"""
+threaddatReader.py
+Reads and parses the .threaddat file extension
+Author: Jeremy Dunne
+Date: September, 2021
+"""
+
+# imports 
 import os
 import csv
 
