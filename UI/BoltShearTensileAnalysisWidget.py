@@ -8,6 +8,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QGroupBox, QFormLayout, QLineEdit
 )
 
+from PyQt5.QtGui import QPixmap
+from ThreadCalculator import *
 
 
 class BoltShearTensileAnalysisWidget(QWidget):
@@ -17,10 +19,11 @@ class BoltShearTensileAnalysisWidget(QWidget):
 
 
         # variables
-        self.thread_data = thread_data
-        self.material_data = material_data
+        self.thread_data = thread_data # imported thread data
+        self.legible_thread_data = self.sanitizeThreadData(self.thread_data) # thread data that is user selected
+        self.material_data = material_data # import material data
 
-        self.organizeThreadData()
+        # self.organizeThreadData()
         self.organizeMaterialData()
 
         # main layout
@@ -39,8 +42,11 @@ class BoltShearTensileAnalysisWidget(QWidget):
 
         right_layout = QVBoxLayout()
         right_layout.addWidget(self.initCalculationWidget())
+        image = self.initImage()
+        right_layout.addWidget(image)
         right_layout.addStretch()
         h_layout.addLayout(right_layout)
+
 
 
         # lock the standard to english for now
@@ -49,47 +55,89 @@ class BoltShearTensileAnalysisWidget(QWidget):
         self.populateThreadSize()
 
 
+    def sanitizeThreadData(self, thread_data):
+        # collapse the data into an array of dicts
+        # [{standard, hint, data:[{screw_size, pitch, external_classes, internal_classes}]}]
+        data = []
+        # print(thread_data)
+        for f in thread_data:
+            standard_data = {}
+            standard_data['standard'] = f['standard']
+            standard_data['hint'] = f['hint']
+            standard_data['data'] = []
+            for t in f['external_data']:
+                if (len(standard_data['data']) > 0) and (standard_data['data'][-1]['screw_size'] == t['screw_size']):
+                    # append pitch, external_class
+                    if t['pitch'] not in standard_data['data'][-1]['pitch']:
+                        standard_data['data'][-1]['pitch'].append(t['pitch'])
+                    if t['thread_class'] not in standard_data['data'][-1]['external_class']:
+                        standard_data['data'][-1]['external_class'].append(t['thread_class'])
+                # not contained, add
+                else:
+                    standard_data['data'].append({'screw_size':t['screw_size'], 'pitch':[t['pitch']], 'external_class':[t['thread_class']], 'internal_class':[]})
+            for t in f['internal_data']:
+                # find the entry
+                for e in standard_data['data']:
+                    if e['screw_size'] == t['screw_size']:
+                        # append class
+                        if t['thread_class'] not in e['internal_class']:
+                            e['internal_class'].append(t['thread_class'])
+            data.append(standard_data)
+        return data
 
     def populateThreadSize(self):
         # populate the thread size options
-        choices = []
-        for t in self.organized_thread_data[0]:
+        choices = [' ']
+        # print(self.legible_thread_data)
+        standard_index = self.standard_combo.currentIndex()
+
+        for t in self.legible_thread_data[standard_index]['data']:
             choices.append(t['screw_size'])
         # print(choices)
         self.screw_size_combo.clear()
         self.screw_size_combo.addItems(choices)
 
+    def onStandardChange(self):
+        # update the screw size, clear everything else
+        self.populateThreadSize()
+
+
     def onScrewSizeChange(self):
         # only show the available options
-        size_index = self.screw_size_combo.currentIndex()
+        standard_index = self.standard_combo.currentIndex()
+        size_index = self.screw_size_combo.currentIndex() - 1
 
-        # threads per inch
-        self.threads_per_inch_combo.clear()
-        possible_threads_per_inch = self.organized_thread_data[0][size_index]['possible_threads_per_inch']
-        self.threads_per_inch_combo.addItems(self.floatArrayToStringArray(possible_threads_per_inch))
+        if self.screw_size_combo.currentText() != ' ':
+            # threads per inch
+            self.threads_per_inch_combo.clear()
+            possible_threads_per_inch = self.legible_thread_data[standard_index]['data'][size_index]['pitch']
+            self.threads_per_inch_combo.addItems(self.floatArrayToStringArray(possible_threads_per_inch))
 
-        # thread class
-        self.external_thread_class_combo.clear()
-        possible_thread_class = self.organized_thread_data[0][size_index]['possible_thread_class']
-        self.external_thread_class_combo.addItems(self.floatArrayToStringArray(possible_thread_class))
+            # thread class
+            self.external_thread_class_combo.clear()
+            possible_thread_class = self.legible_thread_data[standard_index]['data'][size_index]['external_class']
+            self.external_thread_class_combo.addItems(self.floatArrayToStringArray(possible_thread_class))
 
-        # material
-        self.external_thread_material_combo.clear()
-        self.external_thread_material_combo.addItems(self.material_names)
+            # material
+            self.external_thread_material_combo.clear()
+            self.external_thread_material_combo.addItems(self.material_names)
 
-        # internal data
-        # defaults to not selected
-        self.internal_thread_class_combo.clear()
-        possible_thread_class = self.organized_thread_data[0][size_index]['possible_thread_class']
-        self.external_thread_class_combo.addItems(self.floatArrayToStringArray(possible_thread_class))
+            # internal data
+            # defaults to not selected
+            self.internal_thread_class_combo.clear()
+            possible_thread_class = self.legible_thread_data[standard_index]['data'][size_index]['internal_class']
+            self.internal_thread_class_combo.addItem(' ') # blank option
+            self.internal_thread_class_combo.addItems(self.floatArrayToStringArray(possible_thread_class))
 
-    def getThreadData(self, thread_size, thread_pitch, thread_class):
-        # go through thread_data and return the dict with the appropriate data
-        for t in thread_data:
-            if t['screw_size'] == thread_size:
-                if float(t['threads_per_inch']) == float(thread_pitch):
-                    if t['thread_class'] == thread_class:
-                        return t
+            self.internal_thread_material_combo.clear()
+            self.internal_thread_material_combo.addItem(' ') # blank option
+            self.internal_thread_material_combo.addItems(self.material_names)
+        else:
+            # clear everything
+            self.threads_per_inch_combo.clear()
+            self.external_thread_class_combo.clear()
+            self.external_thread_material_combo.clear()
+            self.internal_thread_class_combo.clear()
 
     def floatArrayToStringArray(self, float):
         str_arr = []
@@ -189,7 +237,9 @@ class BoltShearTensileAnalysisWidget(QWidget):
         selection_layout.addWidget(self.calculate_button)
 
         # connections
+        self.standard_combo.currentTextChanged.connect(self.onStandardChange)
         self.screw_size_combo.currentTextChanged.connect(self.onScrewSizeChange)
+        self.calculate_button.clicked.connect(self.onCalculatePressed)
 
         return selection_groupbox
 
@@ -269,28 +319,70 @@ class BoltShearTensileAnalysisWidget(QWidget):
         external_groupbox = QGroupBox("External Thread Calculations")
         external_layout = QFormLayout()
         external_groupbox.setLayout(external_layout)
+        calculation_layout.addWidget(external_groupbox)
 
-        self.external_thread_tensile_area = QLabel("NaN")
-        self.external_thread_shear_area = QLabel("NaN")
-        self.external_thread_shear_yield_strength = QLabel("NaN")
-        self.external_thread_shear_ultimate_strength = QLabel("NaN")
-        self.external_thread_tensile_yield_strength = QLabel("NaN")
-        self.external_thread_tensile_ultimate_strength = QLabel("NaN")
-        external_layout.addRow(QLabel("Thread Shear Area:"), self.external_thread_shear_area)
-        external_layout.addRow(QLabel("Thread Shear Tensile:"), self.external_thread_shear_yield_strength)
-        external_layout.addRow(QLabel("Thread Shear Ultimate:"), self.external_thread_shear_ultimate_strength)
-        external_layout.addRow(QLabel("Thread Tensile Area:"), self.external_thread_tensile_area)
-        external_layout.addRow(QLabel("Thread Tensile Yield:"), self.external_thread_tensile_yield_strength)
-        external_layout.addRow(QLabel("Thread Tensile Ultimate:"), self.external_thread_tensile_ultimate_strength)
+        external_shear_groupbox = QGroupBox("Bolt Shear Loading")
+        external_shear_layout = QFormLayout()
+        external_shear_groupbox.setLayout(external_shear_layout)
+        external_layout.addWidget(external_shear_groupbox)
 
-
+        external_tensile_groupbox = QGroupBox("Bolt Tensile Loading")
+        external_tensile_layout = QFormLayout()
+        external_tensile_groupbox.setLayout(external_tensile_layout)
+        external_layout.addWidget(external_tensile_groupbox)
 
         # internal calculations
         internal_groupbox = QGroupBox("Internal Thread Calculations")
         internal_layout = QFormLayout()
         internal_groupbox.setLayout(internal_layout)
+        calculation_layout.addWidget(internal_groupbox)
 
-        self.internal_thread_shear_area = QLabel("NaN")
+
+        # quick note about naming
+        """
+                                      (bolt)
+            tensile loading <--->   =======|||
+                                        ^ shear loading
+
+
+
+
+
+        """
+
+        # external bolt, shear loading
+        self.external_shear_loading_area = QLabel("NaN")
+        self.external_shear_loading_yield = QLabel("NaN")
+        self.external_shear_loading_ultimate = QLabel("NaN")
+
+        # external bolt, tensile loading
+        self.external_tensile_loading_area = QLabel("NaN")
+        self.external_tensile_loading_yield = QLabel("NaN")
+        self.external_tensile_loading_ultimate = QLabel("NaN")
+
+        # internal, tensile loading
+        self.external_tensile_loading_thread_shear_area = QLabel("NaN")
+        self.external_tensile_loading_thread_shear_yield = QLabel("NaN")
+        self.external_tensile_loading_thread_shear_ultimate = QLabel("NaN")
+        self.internal_tensile_loading_thread_shear_area = QLabel("NaN")
+        self.internal_tensile_loading_thread_shear_yield = QLabel("NaN")
+        self.internal_tensile_loading_thread_shear_ultimate = QLabel("NaN")
+
+        external_shear_layout.addRow(QLabel("Bolt Shear Loading Area:"), self.external_shear_loading_area)
+        external_shear_layout.addRow(QLabel("Bolt Shear Loading Yield Strength:"), self.external_shear_loading_yield)
+        external_shear_layout.addRow(QLabel("Bolt Shear Loading Ultimate Strength:"), self.external_shear_loading_ultimate)
+
+        external_tensile_layout.addRow(QLabel("Bolt Tensile Loading Area: "), self.external_tensile_loading_area)
+        external_tensile_layout.addRow(QLabel("Bolt Tensile Loading Yield Strength: "), self.external_tensile_loading_yield)
+        external_tensile_layout.addRow(QLabel("Bolt Tensile Loading Ultimate Strength: "), self.external_tensile_loading_ultimate)
+
+        external_tensile_layout.addRow(QLabel("Bolt Tensile Loading Thread Shear Area: "), self.external_tensile_loading_thread_shear_area)
+        external_tensile_layout.addRow(QLabel("Bolt Tensile Loading Thread Shear Yield Strength: "), self.external_tensile_loading_thread_shear_yield)
+        external_tensile_layout.addRow(QLabel("Bolt Tensile Loading Thread Shear Tensile Strength: "), self.external_tensile_loading_thread_shear_ultimate)
+
+        internal_layout.addRow(QLabel("Internal Tensile Loading Thread Shear Area: "), self.internal_tensile_loading_thread_shear_area)
+        internal_layout.addRow(QLabel("Internal Tensile Loading Thread Shear Yield Strength: "), self.internal_tensile_loading_thread_shear_yield)
+        internal_layout.addRow(QLabel("Internal Tensile Loading Thread Shear Ultimate Strength: "), self.internal_tensile_loading_thread_shear_ultimate)
 
 
         # summary
@@ -299,10 +391,85 @@ class BoltShearTensileAnalysisWidget(QWidget):
         summary_groupbox.setLayout(summary_layout)
 
 
-        calculation_layout.addWidget(external_groupbox)
-        calculation_layout.addWidget(internal_groupbox)
+
         calculation_layout.addWidget(summary_groupbox)
         return calculation_groupbox
 
+    def initImage(self):
+        # widget = QWidget()
+        label = QLabel()
+        pixmap = QPixmap('./UI/Loading Diagram.jpg')
+        label.setPixmap(pixmap)
+        label.setScaledContents(True)
+        return label
+
+
+
     def onCalculatePressed(self):
+        # check that the required data is provided
+        if self.screw_size_combo.currentIndex() == 0:
+            print("error!")
+            return
+        if self.threads_per_inch_combo.currentText() == ' ':
+            print("error!")
+            return
+        if self.external_thread_class_combo.currentText() == ' ':
+            print("error!")
+            return
+        perform_internal_calcs = True
+        if self.internal_thread_class_combo.currentText() == ' ':
+            perform_internal_calcs = False
+        elif self.internal_thread_material_combo.currentText() == ' ':
+            perform_internal_calcs = False
+
+        # calculations pass, populate information
+        self.populateGeometery(perform_internal_calcs)
+        self.populateMaterial(perform_internal_calcs)
+        self.populateCalculate(perform_internal_calcs)
+
+
+    def populateGeometery(self, perform_internal_calcs):
         pass
+
+    def getMaterialProperties(self, material_name):
+        dict = {}
+        for i in self.material_data:
+            if i['material_name'] == material_name:
+                dict['yield_strength'] = i['yield_strength']
+                dict['tensile_strength'] = i['tensile_strength']
+                return dict
+
+    def populateMaterial(self, perform_internal_calcs):
+        print(self.external_thread_material_combo.currentText())
+        material_name = self.external_thread_material_combo.currentText()
+        external_material = self.getMaterialProperties(material_name)
+        print(external_material['yield_strength'])
+        self.external_material_yield_strength.setText(str(external_material['yield_strength']) + ' psi')
+        self.external_material_tensile_strength.setText(str(external_material['tensile_strength']) + ' psi')
+        if perform_internal_calcs:
+            internal_material = self.getMaterialProperties(self.internal_thread_material_combo.currentText())
+            self.internal_material_yield_strength.setText(str(external_material['yield_strength']) + ' psi')
+            self.internal_material_tensile_strength.setText(str(external_material['tensile_strength']) + ' psi')
+        else:
+            self.internal_material_yield_strength.setText("N/A")
+            self.internal_material_tensile_strength.setText("N/A")
+
+
+    def getExternalThreadData(self, thread_size, thread_pitch, thread_class):
+        # go through thread_data and return the dict with the appropriate data
+        standard_index = self.standard_combo.currentIndex()
+        for t in self.thread_data[standard_index]['external_data']:
+            if t['screw_size'] == thread_size:
+                if float(t['pitch']) == float(thread_pitch):
+                    if t['thread_class'] == thread_class:
+                        return t
+
+
+
+    def populateCalculate(self, perform_internal_calcs):
+        # get the thread data
+
+        # run area calcs
+        external_thread = self.getExternalThreadData(self.screw_size_combo.currentText(), self.threads_per_inch_combo.currentText(), self.external_thread_class_combo.currentText())
+        cross_area = calcThreadTensileArea(external_thread)
+        print(cross_area)
