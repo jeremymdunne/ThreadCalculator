@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QGroupBox, QFormLayout, QLineEdit
 )
 
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QDoubleValidator
 from ThreadCalculator import *
 
 
@@ -222,11 +222,12 @@ class BoltShearTensileAnalysisWidget(QWidget):
         self.internal_thread_class_combo = QComboBox()
         self.internal_thread_material_combo = QComboBox()
         self.thread_engagement_length_input = QLineEdit()
+        self.thread_engagement_length_input.setValidator(QDoubleValidator())
 
 
         internal_layout.addRow(QLabel("Internal Thread Class:"),self.internal_thread_class_combo)
-
         internal_layout.addRow(QLabel("Internal Thread Material:"),self.internal_thread_material_combo)
+        internal_layout.addRow(QLabel("Thread Engagement:"), self.thread_engagement_length_input)
 
 
 
@@ -464,12 +465,68 @@ class BoltShearTensileAnalysisWidget(QWidget):
                     if t['thread_class'] == thread_class:
                         return t
 
+    def getInternalThreadData(self, thread_size, thread_pitch, thread_class):
+        # go through thread_data and return the dict with the appropriate data
+        standard_index = self.standard_combo.currentIndex()
+        for t in self.thread_data[standard_index]['internal_data']:
+            if t['screw_size'] == thread_size:
+                if float(t['pitch']) == float(thread_pitch):
+                    if t['thread_class'] == thread_class:
+                        return t
 
+    def getMaterialData(self, material):
+        for m in self.material_data:
+            if m['material_name'] == material:
+                return m
+
+    def formatFloat(self, value, decimals = 2):
+        # format a float
+        format_str = "{:." + str(decimals) + "f}"
+        str_val = format_str.format(value)
+        return str_val
+
+
+    def setLabelValue(self, label, value, unit):
+        str_val = self.formatFloat(value) + ' ' + str(unit)
+        label.setText(str_val)
 
     def populateCalculate(self, perform_internal_calcs):
         # get the thread data
 
         # run area calcs
         external_thread = self.getExternalThreadData(self.screw_size_combo.currentText(), self.threads_per_inch_combo.currentText(), self.external_thread_class_combo.currentText())
+        external_material = self.getMaterialData(self.external_thread_material_combo.currentText())
         cross_area = calcThreadTensileArea(external_thread)
+
+        # update loading area
+        # shear
+        shear_values = calcFailureThreadShearForce(external_thread, external_material)
+        self.setLabelValue(self.external_shear_loading_area, shear_values['area'], 'in^2')
+        self.setLabelValue(self.external_shear_loading_yield, shear_values['yield_strength'], 'lbf')
+        self.setLabelValue(self.external_shear_loading_ultimate, shear_values['tensile_strength'], 'lbf')
+
+        # tensile
+        tensile_values = calcFailureThreadTensileForce(external_thread, external_material)
+        self.setLabelValue(self.external_tensile_loading_area, tensile_values['area'], 'in^2')
+        self.setLabelValue(self.external_tensile_loading_yield, tensile_values['yield_strength'], 'lbf')
+        self.setLabelValue(self.external_tensile_loading_ultimate, tensile_values['tensile_strength'], 'lbf')
+
+        if perform_internal_calcs:
+            # tensile calcs
+            internal_thread = self.getInternalThreadData(self.screw_size_combo.currentText(), self.threads_per_inch_combo.currentText(), self.internal_thread_class_combo.currentText())
+            internal_material = self.getMaterialData(self.internal_thread_material_combo.currentText())
+            thread_shear_data = calcFailureThreadEngagement(external_thread, external_material, internal_thread, internal_material, float(self.thread_engagement_length_input.text()))
+            # bolt data
+            self.setLabelValue(self.external_tensile_loading_thread_shear_area, thread_shear_data['external_thread_area'], 'in^2')
+            self.setLabelValue(self.external_tensile_loading_thread_shear_yield, thread_shear_data['external_yield_strength'], 'lbf')
+            self.setLabelValue(self.external_tensile_loading_thread_shear_ultimate, thread_shear_data['external_tensile_strength'], 'lbf')
+            # internal
+            self.setLabelValue(self.internal_tensile_loading_thread_shear_area, thread_shear_data['internal_thread_area'], 'in^2')
+            self.setLabelValue(self.internal_tensile_loading_thread_shear_yield, thread_shear_data['internal_yield_strength'], 'lbf')
+            self.setLabelValue(self.internal_tensile_loading_thread_shear_ultimate, thread_shear_data['internal_tensile_strength'], 'lbf')
+
+
+
+
+        #
         print(cross_area)

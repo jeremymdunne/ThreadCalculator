@@ -6,7 +6,7 @@ QGridLayout, QLabel, QTabWidget)
 from ThreadCalculator import *
 from threaddatReader import *
 from materialdatReader import *
-from UI.BoltShearTensileAnalysisWidget import *
+from UI.BoltAnalysisWidget import *
 
 
 
@@ -20,7 +20,7 @@ class ThreadCalcUI(QMainWindow):
         # main widget
 
         tab_widget = QTabWidget()
-        self.BoltShearTensileAnalysis = BoltShearTensileAnalysisWidget(thread_data, material_data)
+        self.BoltShearTensileAnalysis = BoltAnalysisWidget(thread_data, material_data)
         tab_widget.addTab(self.BoltShearTensileAnalysis, "Bolt Shear and Tensile Analysis")
 
         self.setCentralWidget(tab_widget)
