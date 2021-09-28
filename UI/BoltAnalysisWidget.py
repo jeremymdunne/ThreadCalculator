@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import (
     QWidget, QLabel, QComboBox, QPushButton, QGridLayout, QHBoxLayout,
     QVBoxLayout, QGroupBox, QFormLayout, QLineEdit, QErrorMessage
 )
-
 from PyQt5.QtGui import QPixmap, QDoubleValidator
 
 from UI.UnitLabel import UnitLabel
@@ -87,6 +86,9 @@ class BoltAnalysisWidget(QWidget):
         # right pane
         self.calculation_widget = self.initCalculationWidget()
         right_pane_layout.addWidget(self.calculation_widget)
+
+        self.image_widget = self.initImageWidget()
+        right_pane_layout.addWidget(self.image_widget)
         right_pane_layout.addStretch()
 
         # add to the main
@@ -260,6 +262,13 @@ class BoltAnalysisWidget(QWidget):
 
         return calculation_groupbox
 
+
+    def initImageWidget(self):
+        label = QLabel()
+        label.setPixmap(QPixmap('./UI/Bolt Loading Diagram.jpg'))
+        label.setScaledContents(True)
+
+        return label
 
 
     ### UI actions
