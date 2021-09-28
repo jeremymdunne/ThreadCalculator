@@ -5,12 +5,14 @@ Second attempt at a widget
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QComboBox, QPushButton, QGridLayout, QHBoxLayout,
-    QVBoxLayout, QGroupBox, QFormLayout, QLineEdit
+    QVBoxLayout, QGroupBox, QFormLayout, QLineEdit, QErrorMessage
 )
 
 from PyQt5.QtGui import QPixmap, QDoubleValidator
 
 from UI.UnitLabel import UnitLabel
+
+from ThreadCalculator import *
 
 class BoltAnalysisWidget(QWidget):
 
@@ -82,10 +84,14 @@ class BoltAnalysisWidget(QWidget):
         left_pane_layout.addWidget(self.geometry_widget)
         left_pane_layout.addStretch()
 
+        # right pane
+        self.calculation_widget = self.initCalculationWidget()
+        right_pane_layout.addWidget(self.calculation_widget)
+        right_pane_layout.addStretch()
 
         # add to the main
         top_level_layout.addLayout(left_pane_layout)
-        # top_level_layout.addLayout(right_pane_layout)
+        top_level_layout.addLayout(right_pane_layout)
         self.populateStandardOptions()
         self.populateMaterialOptions()
 
@@ -132,6 +138,7 @@ class BoltAnalysisWidget(QWidget):
         # add members
         internal_selection_layout.addRow(QLabel("Internal Thread Class"),self.internal_thread_class_combo)
         internal_selection_layout.addRow(QLabel("Internal Thread Material"),self.internal_thread_material_combo)
+        internal_selection_layout.addRow(QLabel("Thread Engagement"),self.engagement_length_line_edit)
 
         self.calculate_button = QPushButton("Calculate")
         selection_layout.addWidget(self.calculate_button)
@@ -194,6 +201,66 @@ class BoltAnalysisWidget(QWidget):
 
         return geometry_groupbox
 
+    """! init the calculation widget
+    @param self object pointer
+    """
+    def initCalculationWidget(self):
+        calculation_groupbox = QGroupBox("Calculations")
+        calculation_layout = QVBoxLayout()
+        calculation_groupbox.setLayout(calculation_layout)
+
+        external_thread_groupbox = QGroupBox("External Thread Calculations")
+        external_thread_layout = QFormLayout()
+        external_thread_groupbox.setLayout(external_thread_layout)
+        calculation_layout.addWidget(external_thread_groupbox)
+        # members
+        self.external_thread_shear_yield_strength = UnitLabel(unit_label = 'lb')
+        self.external_thread_shear_tensile_strength = UnitLabel(unit_label = 'lb')
+        self.external_thread_tensile_yield_strength = UnitLabel(unit_label = 'lb')
+        self.external_thread_tensile_tensile_strength = UnitLabel(unit_label = 'lb')
+        self.external_thread_thread_shear_yield_strength = UnitLabel(unit_label = 'lb')
+        self.external_thread_thread_shear_tensile_strength = UnitLabel(unit_label = 'lb')
+        # add
+        external_thread_layout.addRow(QLabel('Shear Loading Yield Strength:'), self.external_thread_shear_yield_strength)
+        external_thread_layout.addRow(QLabel('Shear Loading Tensile Strength:'), self.external_thread_shear_tensile_strength)
+        external_thread_layout.addRow(QLabel('Tensile Loading Yield Strength:'), self.external_thread_tensile_yield_strength)
+        external_thread_layout.addRow(QLabel('Tensile Loading Tensile Strength:'), self.external_thread_tensile_tensile_strength)
+        external_thread_layout.addRow(QLabel('Tensile Loading Thread Shear Yield Strength:'), self.external_thread_thread_shear_yield_strength)
+        external_thread_layout.addRow(QLabel('Tensile Loading Thread Shear Tensile Strength:'), self.external_thread_thread_shear_tensile_strength)
+
+        internal_thread_groupbox = QGroupBox("Internal Thread Calculations")
+        internal_thread_layout = QFormLayout()
+        internal_thread_groupbox.setLayout(internal_thread_layout)
+        calculation_layout.addWidget(internal_thread_groupbox)
+        # members
+        self.internal_thread_thread_shear_yield_strength = UnitLabel(unit_label = 'lb')
+        self.internal_thread_thread_shear_tensile_strength = UnitLabel(unit_label = 'lb')
+        # add
+        internal_thread_layout.addRow(QLabel('Tensile Loading Thread Shear Yield Strength:'), self.internal_thread_thread_shear_yield_strength)
+        internal_thread_layout.addRow(QLabel('Tensile Loading Thread Shear Tensile Strength:'), self.internal_thread_thread_shear_tensile_strength)
+
+        summary_groupbox = QGroupBox("Calculation Summary")
+        summary_layout = QFormLayout()
+        summary_groupbox.setLayout(summary_layout)
+        calculation_layout.addWidget(summary_groupbox)
+        # members
+        self.shear_loading_yield_strength = UnitLabel(unit_label = 'lb')
+        self.shear_loading_tensile_strength = UnitLabel(unit_label = 'lb')
+        self.tensile_loading_yield_strength = UnitLabel(unit_label = 'lb')
+        self.tensile_loading_tensile_strength = UnitLabel(unit_label = 'lb')
+        self.tensile_loading_limiting_label = QLabel('')
+        # add
+        summary_layout.addRow(QLabel('Shear Loading Yield Strength:'), self.shear_loading_yield_strength)
+        summary_layout.addRow(QLabel('Shear Loading Tensile Strength:'), self.shear_loading_tensile_strength)
+        summary_layout.addRow(QLabel('Tensile Loading Yield Strength:'), self.tensile_loading_yield_strength)
+        summary_layout.addRow(QLabel('Tensile Loading Tensile Strength:'), self.tensile_loading_tensile_strength)
+        summary_layout.addRow(QLabel('Tensile Loading Limiting Factor:'), self.tensile_loading_limiting_label)
+
+
+
+        return calculation_groupbox
+
+
 
     ### UI actions
     """! on standard change
@@ -253,21 +320,134 @@ class BoltAnalysisWidget(QWidget):
     @param self object pointer
     """
     def onCalculatePressed(self):
+        # first clear all calculations to prevent confusion
+        self.clearValues()
         # first validate input
-
+        if not self.validateExternalInput():
+            msg = QErrorMessage()
+            msg.showMessage('Not all inputs found')
+            msg.exec_()
+            return
+            # cause an error message here
+        using_internal_calcs = self.validateInternalInput()
         # run geometry calculations
+        external_thread_data = self.getExternalThreadData(
+            self.thread_standard_combo.currentText(),
+            self.external_thread_size_combo.currentText(),
+            self.external_thread_pitch_combo.currentText(),
+            self.external_thread_class_combo.currentText())
+        print(external_thread_data)
+        external_material_data = self.getMaterialData(self.external_thread_material_combo.currentText())
+        external_tensile_calcs = calcFailureThreadTensileForce(external_thread_data, external_material_data)
+        external_shear_calcs = calcFailureThreadShearForce(external_thread_data, external_material_data)
+        if using_internal_calcs:
+            internal_thread_data = self.getInternalThreadData(
+                self.thread_standard_combo.currentText(),
+                self.external_thread_size_combo.currentText(),
+                self.external_thread_pitch_combo.currentText(),
+                self.internal_thread_class_combo.currentText())
+            internal_material_data = self.getMaterialData(self.internal_thread_material_combo.currentText())
+            engagement_length = float(self.engagement_length_line_edit.text())
+            internal_thread_calcs = calcFailureThreadEngagement(
+                external_thread_data,
+                external_material_data,
+                internal_thread_data,
+                internal_material_data,
+                engagement_length)
+        # geometry
+        self.external_thread_basic_diameter.setValue(external_thread_data['basic_diameter'])
+        self.external_thread_minor_diamter.setValue(external_thread_data['max_minor_diameter'])
+        self.external_thread_stress_area.setValue(external_tensile_calcs['area'])
+        self.external_thread_material_yield_strength.setValue(external_material_data['yield_strength'])
+        self.external_thread_material_tensile_strength.setValue(external_material_data['tensile_strength'])
 
-        # run regular calculations
+        if using_internal_calcs:
+            self.external_thread_thread_area.setValue(internal_thread_calcs['internal_thread_area'])
+            self.internal_thread_major_diameter.setValue(internal_thread_data['max_major_diameter'])
+            self.internal_thread_minor_diameter.setValue(internal_thread_data['min_minor_diameter'])
+            self.internal_thread_thread_area.setValue(internal_thread_calcs['internal_thread_area'])
+            self.internal_thread_material_yield_strength.setValue(internal_material_data['yield_strength'])
+            self.internal_thread_material_tensile_strength.setValue(internal_material_data['tensile_strength'])
 
-        pass
+        # populate calculations
+        self.external_thread_shear_yield_strength.setValue(external_shear_calcs['yield_strength'])
+        self.external_thread_shear_tensile_strength.setValue(external_shear_calcs['tensile_strength'])
+        self.external_thread_tensile_yield_strength.setValue(external_tensile_calcs['yield_strength'])
+        self.external_thread_tensile_tensile_strength.setValue(external_tensile_calcs['tensile_strength'])
 
-    """! validate input for calculations
+        if using_internal_calcs:
+            self.external_thread_thread_shear_yield_strength.setValue(internal_thread_calcs['external_yield_strength'])
+            self.external_thread_thread_shear_tensile_strength.setValue(internal_thread_calcs['external_tensile_strength'])
+            self.internal_thread_thread_shear_yield_strength.setValue(internal_thread_calcs['internal_yield_strength'])
+            self.internal_thread_thread_shear_tensile_strength.setValue(internal_thread_calcs['internal_tensile_strength'])
+
+        # extra logic
+        self.shear_loading_yield_strength.setValue(external_shear_calcs['yield_strength'])
+        self.shear_loading_tensile_strength.setValue(external_shear_calcs['tensile_strength'])
+
+        if using_internal_calcs:
+            if internal_thread_calcs['external_yield_strength'] > internal_thread_calcs['internal_yield_strength']:
+                self.tensile_loading_yield_strength.setValue(internal_thread_calcs['internal_yield_strength'])
+                self.tensile_loading_tensile_strength.setValue(internal_thread_calcs['internal_tensile_strength'])
+                self.tensile_loading_limiting_label.setText("Internal Thread")
+            else:
+                self.tensile_loading_yield_strength.setValue(internal_thread_calcs['external_yield_strength'])
+                self.tensile_loading_tensile_strength.setValue(internal_thread_calcs['external_yield_strength'])
+                self.tensile_loading_limiting_label.setText("External Thread")
+
+    """! validate input for internal calculations
     @param self object pointer
     @return boolean for if input is valid
     """
-    def validateInput(self):
+    def validateInternalInput(self):
+        if self.internal_thread_class_combo.currentText() != '':
+            if self.internal_thread_material_combo.currentText() != '':
+                if self.engagement_length_line_edit.text() != '':
+                    return True
+        return False
+
+
+    """! validate input for external calculations
+    @param self object pointer
+    @return boolean for if input is valid
+    """
+    def validateExternalInput(self):
+        # as of now, all the external thread has default inputs
         return True
 
+    """! clear all values
+    clears all values in preperation for new calculations
+    @param self object pointer
+    """
+    def clearValues(self):
+        # geometry
+        self.external_thread_basic_diameter.clearValue()
+        self.external_thread_minor_diamter.clearValue()
+        self.external_thread_stress_area.clearValue()
+        self.external_thread_thread_area.clearValue()
+        self.external_thread_material_yield_strength.clearValue()
+        self.external_thread_material_tensile_strength.clearValue()
+        self.internal_thread_major_diameter.clearValue()
+        self.internal_thread_minor_diameter.clearValue()
+        self.internal_thread_thread_area.clearValue()
+        self.internal_thread_material_yield_strength.clearValue()
+        self.internal_thread_material_tensile_strength.clearValue()
+
+        # calculations
+        self.external_thread_shear_yield_strength.clearValue()
+        self.external_thread_shear_tensile_strength.clearValue()
+        self.external_thread_tensile_yield_strength.clearValue()
+        self.external_thread_tensile_tensile_strength.clearValue()
+        self.external_thread_thread_shear_yield_strength.clearValue()
+        self.external_thread_thread_shear_tensile_strength.clearValue()
+
+        self.internal_thread_thread_shear_yield_strength.clearValue()
+        self.internal_thread_thread_shear_tensile_strength.clearValue()
+        self.shear_loading_yield_strength.clearValue()
+        self.shear_loading_tensile_strength.clearValue()
+        self.tensile_loading_yield_strength.clearValue()
+        self.tensile_loading_tensile_strength.clearValue()
+        self.tensile_loading_limiting_label.setText('')
 
 
     ### helper functions
@@ -295,10 +475,10 @@ class BoltAnalysisWidget(QWidget):
     """
     def getExternalThreadData(self, standard, screw_size, pitch, thread_class):
         for s in self.thread_data:
-            if s['standard'] == standard:
+            if s['hint'] == standard:
                 for t in s['external_data']:
                     if t['screw_size'] == screw_size:
-                        if t['pitch'] == str(pitch):
+                        if float(t['pitch']) == float(pitch):
                             if t['thread_class'] == thread_class:
                                 return t
 
@@ -314,10 +494,10 @@ class BoltAnalysisWidget(QWidget):
     """
     def getInternalThreadData(self, standard, screw_size, pitch, thread_class):
         for s in self.thread_data:
-            if s['standard'] == standard:
+            if s['hint'] == standard:
                 for t in s['internal_data']:
                     if t['screw_size'] == screw_size:
-                        if t['pitch'] == str(pitch):
+                        if float(t['pitch']) == float(pitch):
                             if t['thread_class'] == thread_class:
                                 return t
 
