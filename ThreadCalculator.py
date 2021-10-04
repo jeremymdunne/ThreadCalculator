@@ -43,7 +43,34 @@ def calcFailureThreadEngagement(external_thread, external_material, internal_thr
     dict['internal_yield_strength'] = internal_material['yield_strength'] * 0.6 * dict['internal_thread_area']
     dict['internal_tensile_strength'] = internal_material['tensile_strength'] * 0.6 * dict['internal_thread_area']
 
-    return dict 
+    return dict
+
+"""! calculate the required force to deform a hole
+@param external_thread dict containing thread data (used for diameter)
+@param internal_material dict containing the hole strengths (yield and tensile)
+@param t thickness of the material (or depth the thread engages, whichever is less)
+@return dict containing the yield force and tensile force
+"""
+def calcHoleDeformationForce(external_thread, internal_material, t):
+    # calculate the area
+    dict = {}
+    dict['area'] = external_thread['basic_diameter'] * t # projected area 
+    dict['yield_strength'] = dict['area'] * internal_material['yield_strength']
+    dict['tensile_strength'] = dict['area'] * internal_material['tensile_strength']
+    return dict
+
+"""! calculate the required force to tear out a hole
+@param external_thread dict containing thread data (used for diameter)
+@param internal_material dict containing the hole strengths (yield and tensile)
+@param t thickness of the material (or depth the thread engages, whichever is less)
+@return dict containing the yield force and tensile force
+"""
+def calcHoleTearoutForce(external_thread, internal_material, a, t):
+    dict = {}
+    dict['area'] = 2 * (a - external_thread['basic_diameter'] / 2) # conservative
+    dict['yield_strength'] = dict['area'] * internal_material['yield_strength']
+    dict['tensile_strength'] = dict['area'] * internal_material['tensile_strength']
+    return dict
 
 
 def getThreadData():

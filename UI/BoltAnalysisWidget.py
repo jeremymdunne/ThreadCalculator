@@ -5,7 +5,7 @@ Second attempt at a widget
 
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QComboBox, QPushButton, QGridLayout, QHBoxLayout,
-    QVBoxLayout, QGroupBox, QFormLayout, QLineEdit, QErrorMessage
+    QVBoxLayout, QGroupBox, QFormLayout, QLineEdit, QErrorMessage, QCheckBox
 )
 from PyQt5.QtGui import QPixmap, QDoubleValidator
 
@@ -136,11 +136,15 @@ class BoltAnalysisWidget(QWidget):
         self.engagement_length_line_edit.setValidator(QDoubleValidator())
         self.internal_thread_class_combo = QComboBox()
         self.internal_thread_material_combo = QComboBox()
+        self.adjust_thread_engagement_length = QCheckBox('Remove 2 Threads From Engagement Length')
+        self.adjust_thread_engagement_length.setChecked(True)
 
         # add members
         internal_selection_layout.addRow(QLabel("Internal Thread Class"),self.internal_thread_class_combo)
         internal_selection_layout.addRow(QLabel("Internal Thread Material"),self.internal_thread_material_combo)
         internal_selection_layout.addRow(QLabel("Thread Engagement"),self.engagement_length_line_edit)
+        internal_selection_layout.addRow(self.adjust_thread_engagement_length)
+
 
         self.calculate_button = QPushButton("Calculate")
         selection_layout.addWidget(self.calculate_button)
@@ -172,6 +176,7 @@ class BoltAnalysisWidget(QWidget):
         self.external_thread_minor_diamter = UnitLabel(unit_label = 'in')
         self.external_thread_stress_area = UnitLabel(unit_label = 'in^2')
         self.external_thread_thread_area = UnitLabel(unit_label = 'in^2')
+        self.used_engagement_length = UnitLabel(unit_label = 'in')
         self.external_thread_material_yield_strength = UnitLabel(unit_label = 'psi')
         self.external_thread_material_tensile_strength = UnitLabel(unit_label = 'psi')
         # add members
@@ -179,6 +184,7 @@ class BoltAnalysisWidget(QWidget):
         external_thread_layout.addRow(QLabel("Screw Minor Diameter"), self.external_thread_minor_diamter)
         external_thread_layout.addRow(QLabel("Screw Stress Area"), self.external_thread_stress_area)
         external_thread_layout.addRow(QLabel("Screw Thread Area"), self.external_thread_thread_area)
+        external_thread_layout.addRow(QLabel("Engagement Length Used"),self.used_engagement_length)
         external_thread_layout.addRow(QLabel("Screw Material Yield Strength"), self.external_thread_material_yield_strength)
         external_thread_layout.addRow(QLabel("Screw Material Tensile Strength"), self.external_thread_material_tensile_strength)
 
@@ -357,6 +363,9 @@ class BoltAnalysisWidget(QWidget):
                 self.internal_thread_class_combo.currentText())
             internal_material_data = self.getMaterialData(self.internal_thread_material_combo.currentText())
             engagement_length = float(self.engagement_length_line_edit.text())
+            if self.adjust_thread_engagement_length.isChecked():
+                engagement_length -= 2 * 1 / external_thread_data['pitch']
+            self.used_engagement_length.setValue(engagement_length)
             internal_thread_calcs = calcFailureThreadEngagement(
                 external_thread_data,
                 external_material_data,
@@ -441,7 +450,7 @@ class BoltAnalysisWidget(QWidget):
         self.internal_thread_thread_area.clearValue()
         self.internal_thread_material_yield_strength.clearValue()
         self.internal_thread_material_tensile_strength.clearValue()
-
+        self.used_engagement_length.clearValue()
         # calculations
         self.external_thread_shear_yield_strength.clearValue()
         self.external_thread_shear_tensile_strength.clearValue()

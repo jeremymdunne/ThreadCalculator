@@ -7,7 +7,7 @@ from ThreadCalculator import *
 from threaddatReader import *
 from materialdatReader import *
 from UI.BoltAnalysisWidget import *
-
+from UI.BoltedConnectionAnalysisWidget import *
 
 
 class ThreadCalcUI(QMainWindow):
@@ -21,7 +21,9 @@ class ThreadCalcUI(QMainWindow):
 
         tab_widget = QTabWidget()
         self.BoltShearTensileAnalysis = BoltAnalysisWidget(thread_data, material_data)
+        self.BoltedConnectionAnalysis = BoltedConnectionAnalysisWidget(thread_data, material_data)
         tab_widget.addTab(self.BoltShearTensileAnalysis, "Bolt Shear and Tensile Analysis")
+        tab_widget.addTab(self.BoltedConnectionAnalysis, "Bolted Connection Analysis")
 
         self.setCentralWidget(tab_widget)
 
